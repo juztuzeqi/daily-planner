@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Routine Planner</title>
+
+<!-- PWA Meta Tags -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Daily Planner">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<meta name="theme-color" content="#4f46e5">
+
+<style>
+body{font-family:system-ui,sans-serif;background:#f7f7f7;margin:0;padding:10px}
+.topbar{display:flex;justify-content:space-between;margin-bottom:6px}
+.btn{background:#eee;border:none;padding:5px 8px;border-radius:8px;font-size:13px;cursor:pointer}
+.btn:hover{background:#ddd}
+.card{background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+h1{font-size:17px;margin:0 0 6px}
+.date{font-size:13px;color:#666;margin-bottom:8px}
+h2{font-size:14px;margin:10px 0 4px}
+ul{list-style:none;padding:0;margin:0}
+li{display:flex;align-items:center;margin-bottom:6px;font-size:14px}
+input[type=checkbox]{margin-right:6px;cursor:pointer}
+.done{text-decoration:line-through;color:#999}
+.add{display:flex;margin-bottom:6px;gap:4px}
+.add input{flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px}
+.add button{background:#4f46e5;color:white;border:none;border-radius:6px;padding:8px 12px;cursor:pointer;font-size:16px}
+.add button:hover{background:#4338ca}
+.del{margin-left:auto;background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:4px 8px}
+.del:hover{background:#fee2e2;border-radius:4px}
+.note{font-size:12px;color:#666;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="btn" onclick="prevDate()">◀</button>
+  <button class="btn" onclick="goHome()">🏠 Home</button>
+  <button class="btn" onclick="nextDate()">▶</button>
+</div>
+
+<div class="card">
+  <h1>📋 Daily Planner</h1>
+  <div class="date" id="date"></div>
+
+  <h2>🔁 Routine</h2>
+  <div class="note">Muncul otomatis setiap hari</div>
+  <div class="add">
+    <input id="newRoutine" placeholder="Tambah routine baru…" onkeypress="if(event.key==='Enter')addRoutine()">
+    <button onclick="addRoutine()">＋</button>
+  </div>
+  <ul id="routine"></ul>
+
+  <h2>📌 Appointment / Non-routine</h2>
+  <div class="note">Hanya untuk hari ini</div>
+  <div class="add">
+    <input id="newOnce" placeholder="Tambah appointment…" onkeypress="if(event.key==='Enter')addOnce()">
+    <button onclick="addOnce()">＋</button>
+  </div>
+  <ul id="once"></ul>
+</div>
+
+<script>
+let current = new Date();
+const dateEl = document.getElementById('date');
+
+// ===== STORAGE KEYS =====
+const ROUTINE_TEMPLATE_KEY = 'routine-template';
+function dateKey(d){
+  return d.getFullYear() + '-' + 
+         (d.getMonth() + 1).toString().padStart(2, '0') + '-' + 
+         d.getDate().toString().padStart(2, '0');
+}
+function routineDayKey(){ return 'routine-day-' + dateKey(current); }
+function onceKey(){ return 'once-day-' + dateKey(current); }
+
+// ===== LOAD / SAVE =====
+function load(key){ 
+  return JSON.parse(localStorage.getItem(key) || '[]'); 
+}
+function save(key, data){ 
+  localStorage.setItem(key, JSON.stringify(data)); 
+}
+
+// ===== INIT DAILY ROUTINE =====
+function initRoutineForDay(){
+  const dayKey = routineDayKey();
+  const template = load(ROUTINE_TEMPLATE_KEY);
+  let dayData = load(dayKey);
+
+  template.forEach(t => {
+    if(!dayData.some(d => d.text === t.text)){
+      dayData.push({ text: t.text, done: false });
+    }
+  });
+
+  save(dayKey, dayData);
+}
+
+// ===== RENDER =====
+function render(){
+  dateEl.textContent = current.toLocaleDateString('id-ID', {
+    weekday:'long', year:'numeric', month:'long', day:'numeric'
+  });
+  initRoutineForDay();
+  renderList('routine', routineDayKey());
+  renderList('once', onceKey());
+}
+
+function renderList(type, key){
+  const ul = document.getElementById(type);
+  const data = load(key);
+  ul.innerHTML = '';
+  
+  if(data.length === 0){
+    const li = document.createElement('li');
+    li.innerHTML = '<span style="color:#999;font-style:italic">Belum ada item</span>';
+    ul.appendChild(li);
+    return;
+  }
+  
+  data.forEach((t, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <input type="checkbox" ${t.done?'checked':''}>
+      <span class="${t.done?'done':''}">${t.text}</span>
+      <button class="del" type="button">✕</button>
+    `;
+    
+    li.querySelector('input').onchange = e => {
+      data[i].done = e.target.checked;
+      save(key, data);
+      renderList(type, key);
+    };
+    
+    li.querySelector('button').onclick = () => {
+      if(type === 'routine'){
+        const template = load(ROUTINE_TEMPLATE_KEY);
+        const templateIndex = template.findIndex(item => item.text === t.text);
+        if(templateIndex > -1){
+          template.splice(templateIndex, 1);
+          save(ROUTINE_TEMPLATE_KEY, template);
+        }
+      }
+      data.splice(i, 1);
+      save(key, data);
+      renderList(type, key);
+    };
+    
+    ul.appendChild(li);
+  });
+}
+
+// ===== ADD ITEMS =====
+function addRoutine(){
+  const input = document.getElementById('newRoutine');
+  const text = input.value.trim();
+  if(!text) return;
+
+  const template = load(ROUTINE_TEMPLATE_KEY);
+  if(!template.some(t => t.text === text)){
+    template.push({ text });
+    save(ROUTINE_TEMPLATE_KEY, template);
+  }
+
+  const dayKey = routineDayKey();
+  const dayData = load(dayKey);
+  if(!dayData.some(d => d.text === text)){
+    dayData.push({ text, done: false });
+    save(dayKey, dayData);
+  }
+
+  input.value = '';
+  renderList('routine', dayKey);
+}
+
+function addOnce(){
+  const input = document.getElementById('newOnce');
+  const text = input.value.trim();
+  if(!text) return;
+
+  const key = onceKey();
+  const data = load(key);
+  data.push({ text, done: false });
+  save(key, data);
+
+  input.value = '';
+  renderList('once', key);
+}
+
+// ===== NAVIGATION =====
+function prevDate(){ 
+  current.setDate(current.getDate() - 1); 
+  render(); 
+}
+function nextDate(){ 
+  current.setDate(current.getDate() + 1); 
+  render(); 
+}
+function goHome(){ 
+  current = new Date();
+  render();
+}
+
+// Initialize
+render();
+
+// ===== SERVICE WORKER REGISTRATION =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('✅ Service Worker registered'))
+      .catch(err => console.log('❌ Service Worker error:', err));
+  });
+}
+
+// Detect PWA installation
+window.addEventListener('appinstalled', () => {
+  console.log('✅ PWA installed successfully');
+});
+</script>
+</body>
+</html>
